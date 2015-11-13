@@ -1,7 +1,14 @@
+#include "Sim900.h"
 #include <EEPROM.h>
 #include <LiquidCrystal.h>
 #include <SoftwareSerial.h>
 #include <OneWire.h>
+
+#include <TempSensor.h>
+#include <ControllerLcd.h>
+#include <Button.h>
+#include <SwitchableDevice.h>
+
 
 // Pins
 #define GSM_SW_PIN         9
@@ -14,94 +21,56 @@
 #define BOILER_OFF_BTN     A3
 
 // Constants
-const static byte TEMPERATURE_SENSOR_RESOLUTION = 0b00111111;            // 10-bit resolution (6th and 7th bit define 9..12-bit resolution)
-const static int BOILER_STATUS_EEPROM_ADDRESS = 0;                       // Address in EEPROM where status of boiler stores (1 - ON, 0 - OFF)  
-const static int DEBOUNCE_DELAY_MS = 100;                                // Minimal time (milliseconds) the button should be pressed to change value
+const int BOILER_STATUS_EEPROM_ADDRESS = 7;                       // Address in EEPROM where status of boiler is stored  
+const byte STATE_ON = 0x20;
+const byte STATE_OFF = 0x10;
+const int PUMP_TURN_ON_TEMPERATURE = 70;
+const int PUMP_TURN_ON_HYSTERESIS = 2;
 
 // Global variables
-LiquidCrystal lcd(10, 6, 5, 4, 3, 2);
-SoftwareSerial gsmModule(7, 8);
-OneWire boilerTempSensor(BOILER_TEMP_PIN);
-OneWire roomTempSensor(ROOM_TEMP_PIN);
-OneWire unitTempSensor(UNIT_TEMP_PIN);
+LiquidCrystal lcdDevice(10, 6, 5, 4, 3, 2);
+SoftwareSerial gsmModuleDevice(7, 8);
+OneWire boilerTempDevice(BOILER_TEMP_PIN);
+OneWire roomTempDevice(ROOM_TEMP_PIN);
+OneWire unitTempDevice(UNIT_TEMP_PIN);
 
-byte boilerTempSensorRomCode[8];
-byte roomTempSensorRomCode[8];
-byte unitTempSensorRomCode[8];
-float boilerTemperature;
-float roomTemperature;
-float unitTemerature;  
-boolean isBoilerTemperatureSensorPresent;
-boolean isRoomTemperatureSensorPresent;
-boolean isUnitTemperatureSensorPresent;
+ControllerLcd lcd(lcdDevice);
+TempSensor boilerTempSensor(boilerTempDevice, TempSensor::_10BIT_RESOLUTION, Serial);
+TempSensor roomTempSensor(roomTempDevice, TempSensor::_10BIT_RESOLUTION, Serial);
+TempSensor unitTempSensor(unitTempDevice, TempSensor::_10BIT_RESOLUTION, Serial);
+Button boilerButtonOn(BOILER_ON_BTN, Serial);
+Button boilerButtonOff(BOILER_OFF_BTN, Serial);
+SwitchableDevice boiler(BOILER_SW_ON);
+SwitchableDevice pump(PUMP_SW_ON);
 
-
-boolean isBoilerOn, isPumpOn;
-
-boolean isBoilerOnButtonPreviousStateIsOn, isBoilerOffButtonPreviousStateIsOn;
-unsigned long boilerOnButtonPressedTime, boilerOffButtonPressedTime;
+void initializePins();
+void printshit();
+void updateBoilderStateToEeprom();
+void processBoilerTempSensor();
+void processRoomTempSensor();
+void processUnitTempSensor();
 
 void setup() {
-	lcd.begin(20, 4);
-	lcd.noCursor();
-	lcd.setCursor(0,0);
-	lcd.print(F("Initializing device"));
-	lcd.setCursor(3,2);
-	lcd.print(F("please wait..."));
+	lcd.init();
+	lcd.showSplashScreen();
 	initializePins();
-	initializeTemperatureSensors();
-	loadBoilerStateFromEeprom();
 	Serial.begin(19200);
-	gsmModule.begin(19200);                               // SIM900 module earlier should be configured to 19200 (AT+IPR command)
-	
+	//	gsmModule.begin(19200);                               // SIM900 module earlier should be configured to 19200 (AT+IPR command)
+	delay(1000);
+	boiler.applyState(EEPROM.read(BOILER_STATUS_EEPROM_ADDRESS));
+	lcd.printBlankTemplate();
+
 }
 
 void loop() {
-	lcd.clear();
-	lcd.setCursor(0,0);
-	
-	
-	// Executing "Boiler ON Button" routine and getting rid of button press debouncing
-	if (digitalRead(BOILER_ON_BTN) && !isBoilerOn) {
-		if ( !isBoilerOnButtonPreviousStateIsOn) {
-			isBoilerOnButtonPreviousStateIsOn = true;
-			boilerOnButtonPressedTime = millis();
-		} else {
-			if ( (millis() - boilerOnButtonPressedTime) > DEBOUNCE_DELAY_MS) {
-				isBoilerOn = true;
-				updateBoilerStateToEeprom();
-			}
-		}
-	} else {
-		isBoilerOnButtonPreviousStateIsOn = false;
-	}
-	
-	// Executing "Boiler OFF Button" routine and getting rid of button press debouncing
-	if (digitalRead(BOILER_OFF_BTN) && isBoilerOn) {
-		if ( !isBoilerOffButtonPreviousStateIsOn) {
-			isBoilerOffButtonPreviousStateIsOn = true;
-			boilerOffButtonPressedTime = millis();
-		} else {
-			if ( (millis() - boilerOffButtonPressedTime) > DEBOUNCE_DELAY_MS) {
-				isBoilerOn = false;
-				updateBoilerStateToEeprom();
-			}
-		}
-	}  else {
-		isBoilerOffButtonPreviousStateIsOn = false;
-	}
-	
-	// Switching boiler and pump relays
-	if (isBoilerOn) {
-		digitalWrite(BOILER_SW_ON, HIGH);
-	} else {
-		digitalWrite(BOILER_SW_ON, LOW);
-	}
-	if (isPumpOn) {
-		digitalWrite(PUMP_SW_ON, HIGH);
-	} else {
-		digitalWrite(PUMP_SW_ON, LOW);
-	}
+	if (boilerButtonOn.isButtonPressed()) { boiler.turnOn(); }
+	if (boilerButtonOff.isButtonPressed()) { boiler.turnOff(); }
+	updateBoilderStateToEeprom();
+	lcd.printPumpState(pump.isOn);
+
+	processBoilerTempSensor();
+	processRoomTempSensor();
+	processUnitTempSensor();
 
 }
 
@@ -116,35 +85,59 @@ void initializePins() {
 	pinMode(BOILER_OFF_BTN, INPUT);
 }
 
-void initializeTemperatureSensors() {
-	if (readTemperatureSensorRomCode(boilerTempSensor, boilerTempSensorRomCode)) {
-		isBoilerTemperatureSensorPresent = true;
-		setTemperatureSensorResolution(boilerTempSensor, boilerTempSensorRomCode, TEMPERATURE_SENSOR_RESOLUTION);
-	} else {
-		isBoilerTemperatureSensorPresent = false;
-	}
-	if (readTemperatureSensorRomCode(roomTempSensor, roomTempSensorRomCode)) {
-		isRoomTemperatureSensorPresent = true;
-		setTemperatureSensorResolution(roomTempSensor, roomTempSensorRomCode, TEMPERATURE_SENSOR_RESOLUTION);
-		} else {
-		isRoomTemperatureSensorPresent = false;
-	}
-	if (readTemperatureSensorRomCode(unitTempSensor, unitTempSensorRomCode)) {
-		isUnitTemperatureSensorPresent = true;
-		setTemperatureSensorResolution(unitTempSensor, unitTempSensorRomCode, TEMPERATURE_SENSOR_RESOLUTION);
-		} else {
-		isUnitTemperatureSensorPresent = false;
-	}
+void updateBoilderStateToEeprom()
+{
+	if (boiler.isOn) { EEPROM.update(BOILER_STATUS_EEPROM_ADDRESS, STATE_ON); }
+	else { EEPROM.update(BOILER_STATUS_EEPROM_ADDRESS, STATE_OFF); }
 }
 
-void initializeGSMModule() {
-	turnOnGsmModule(GSM_SW_PIN);
+void processBoilerTempSensor()
+{
+	if (boilerTempSensor.isWorking)
+	{
+		if (boilerTempSensor.isConvertCalled && boilerTempSensor.isConvertFinished) { boilerTempSensor.updateTemperatureValue(); }
+		if (!boilerTempSensor.isConvertCalled) { boilerTempSensor.callConvert(); }
+		lcd.printBoilerTemperature(boilerTempSensor.temperatureValue);
+		if (boilerTempSensor.temperatureValue > PUMP_TURN_ON_TEMPERATURE) { pump.turnOn(); }
+		if (boilerTempSensor.temperatureValue < PUMP_TURN_ON_TEMPERATURE - PUMP_TURN_ON_HYSTERESIS) { pump.turnOff(); }
+	}
+	else
+	{
+		if (boilerTempSensor.readRomCode()) { boilerTempSensor.setResolution(*boilerTempSensor.resolution); }
+		lcd.printBoilerTemperature(TempSensor::ERROR_TEMPERATURE_VALUE);
+		pump.turnOff();
+	}
+	boilerTempSensor.updateFlags();
 }
 
-void loadBoilerStateFromEeprom() {
-	isBoilerOn = (boolean)EEPROM.read(BOILER_STATUS_EEPROM_ADDRESS);
+void processRoomTempSensor()
+{
+	if (roomTempSensor.isWorking)
+	{
+		if (roomTempSensor.isConvertCalled && roomTempSensor.isConvertFinished) { roomTempSensor.updateTemperatureValue(); }
+		if (!roomTempSensor.isConvertCalled) { roomTempSensor.callConvert(); }
+		lcd.printRoomTemperature(roomTempSensor.temperatureValue);
+	}
+	else
+	{
+		if (roomTempSensor.readRomCode()) { roomTempSensor.setResolution(*roomTempSensor.resolution); }
+		lcd.printRoomTemperature(TempSensor::ERROR_TEMPERATURE_VALUE);
+	}
+	roomTempSensor.updateFlags();
 }
 
-void updateBoilerStateToEeprom() {
-	EEPROM.update(BOILER_STATUS_EEPROM_ADDRESS, (byte)isBoilerOn);
+void processUnitTempSensor()
+{
+	if (unitTempSensor.isWorking)
+	{
+		if (unitTempSensor.isConvertCalled && unitTempSensor.isConvertFinished) { unitTempSensor.updateTemperatureValue(); }
+		if (!unitTempSensor.isConvertCalled) { unitTempSensor.callConvert(); }
+		lcd.printUnitTemperature(unitTempSensor.temperatureValue);
+	}
+	else
+	{
+		if (unitTempSensor.readRomCode()) { unitTempSensor.setResolution(*unitTempSensor.resolution); }
+		lcd.printUnitTemperature(TempSensor::ERROR_TEMPERATURE_VALUE);
+	}
+	unitTempSensor.updateFlags();
 }
