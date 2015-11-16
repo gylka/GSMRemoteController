@@ -1,6 +1,6 @@
 #include "Button.h"
 
-Button::Button(int buttonPin, HardwareSerial& debuggerSerial): pin(buttonPin), buttonPressedMillisTime(0), isButtonPreviousStateIsOn(false), serial(&debuggerSerial)
+Button::Button(int buttonPin): pin(buttonPin), buttonPressedMillisTime(0), isButtonPreviousStateIsOn(false)
 {
 }
 

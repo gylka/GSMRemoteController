@@ -2,9 +2,6 @@
 #define _SWITCHABLEDEVICE_h
 
 #include "arduino.h"
-#include <EEPROM.h>;
-
-
 
 class SwitchableDevice
 {

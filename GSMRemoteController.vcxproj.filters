@@ -16,7 +16,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="GSMRemoteController.ino" />
-    <None Include="GsmModuleRoutines.ino" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="__vm\.GSMRemoteController.vsarduino.h">
@@ -37,6 +36,9 @@
     <ClInclude Include="Sim900.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="BigBufferSoftwareSerial.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="TempSensor.cpp">
@@ -52,6 +54,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Sim900.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="BigBufferSoftwareSerial.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

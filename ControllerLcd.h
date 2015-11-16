@@ -25,18 +25,17 @@ public:
 
 	explicit ControllerLcd(LiquidCrystal& display);
 
-	void clear() const;
-	void init();
+	inline void clear() const	{	lcd->clear();	};
+	void init() const;
 	void showSplashScreen();
 	void printBlankTemplate();
 	void printGsmModuleState(boolean isModuleOn);
-	void printGsmSignal(unsigned int signalLevel);
+	void printGsmSignal(byte signalLevel);
 	void printBoilerTemperature(float boilerTemperature);
 	void printPumpState(boolean isPumpOn);
 	void printRoomTemperature(float roomTemperature);
-	void printUpTime(unsigned int months, unsigned int days, unsigned int hours);
+	void printStartTime(byte days, byte month, byte hours, byte minute);
 	void printUnitTemperature(float unitTemperature);
-	LiquidCrystal& getLcd() const;
 
 };
 

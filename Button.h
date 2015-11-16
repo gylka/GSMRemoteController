@@ -12,10 +12,9 @@ private:
 	int pin;
 	unsigned long buttonPressedMillisTime;
 	boolean isButtonPreviousStateIsOn;
-	HardwareSerial *serial;
 
 public:
-	Button(int buttonPin, HardwareSerial& debuggerSerial);
+	Button(int buttonPin);
 	boolean isButtonPressed();
 };
 

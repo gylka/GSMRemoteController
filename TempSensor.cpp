@@ -1,14 +1,9 @@
 #include "TempSensor.h"
 
-Resolution TempSensor::_9BIT_RESOLUTION = { 0b00011111, 100 };     // conversion time 93.75ms
-Resolution TempSensor::_10BIT_RESOLUTION = { 0b00111111, 200 };    // conversion time 187.5ms
+//Resolution TempSensor::_9BIT_RESOLUTION = { 0b00011111, 100 };     // conversion time 93.75ms
+//Resolution TempSensor::_10BIT_RESOLUTION = { 0b00111111, 200 };    // conversion time 187.5ms
 Resolution TempSensor::_11BIT_RESOLUTION = { 0b01011111, 400 };    // conversion time 375ms
-Resolution TempSensor::_12BIT_RESOLUTION = { 0b01111111, 800 };    // conversion time 750ms
-
-TempSensor::TempSensor(OneWire& device, HardwareSerial& debuggerSerial)
-{
-	TempSensor(device,_9BIT_RESOLUTION, debuggerSerial);
-}
+//Resolution TempSensor::_12BIT_RESOLUTION = { 0b01111111, 800 };    // conversion time 750ms
 
 TempSensor::TempSensor(OneWire& device, Resolution& resolutionConfig, HardwareSerial& debuggerSerial)
 {
@@ -76,8 +71,6 @@ boolean TempSensor::setResolution(Resolution& resolutionConfig)
 
 boolean TempSensor::callConvert()
 {
-	serial->println("Entering convert");
-	serial->println(millis());
 	boolean result = false;
 	if (DS18B20->reset())
 	{
@@ -100,8 +93,6 @@ boolean TempSensor::callConvert()
 
 boolean TempSensor::updateTemperatureValue()
 {
-	serial->println("Entering update");
-	serial->println(millis());
 	boolean result = false;
 	if (DS18B20->reset())
 	{
@@ -129,15 +120,6 @@ boolean TempSensor::updateTemperatureValue()
 
 void TempSensor::updateFlags()
 {
-	serial->print("isWorking ");
-	serial->println((byte)isWorking);
-	serial->print("isPresent ");
-	serial->println((byte)isPresent);
-	serial->print("millisStoppedWorking ");
-	serial->println(millisStoppedWorking);
-	serial->print("millis ");
-	serial->println(millis());
-
 	if (!isPresent && isWorking)
 	{
 		// using millisStoppedWorking as a flag at same time (if == 0 -> then it's the 1st time isPresent turned zero)

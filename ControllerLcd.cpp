@@ -53,17 +53,10 @@ byte ControllerLcd::SIGNAL_BAR_MEDIUM_SIGNAL[4] = { 0,0,2,3 };
 byte ControllerLcd::SIGNAL_BAR_GOOD_SIGNAL[4] = { 0,0,0,3 };
 byte ControllerLcd::SIGNAL_BAR_SUPER_SIGNAL[4] = { 0,0,0,0 };
 
-ControllerLcd::ControllerLcd(LiquidCrystal& display)
-{
-	lcd = &display;
-}
+ControllerLcd::ControllerLcd(LiquidCrystal& display) {	lcd = &display; }
 
-void ControllerLcd::clear() const
+void ControllerLcd::init() const
 {
-	lcd->clear();
-}
-
-void ControllerLcd::init() {
 	lcd->begin(20,4);
 	lcd->clear();
 	lcd->noCursor();
@@ -104,20 +97,14 @@ void ControllerLcd::printBlankTemplate() {
 void ControllerLcd::printGsmModuleState(boolean isModuleOn)
 {
 	lcd->setCursor(4, 0);
-	if (isModuleOn)
-	{
-		lcd->print(F("ON "));
-	} 
-	else
-	{
-		lcd->print(F("OFF"));
-	};
+	if (isModuleOn) 	{	lcd->print(F("ON "));	} 
+	else	{	lcd->print(F("OFF"));	};
 }
 
-void ControllerLcd::printGsmSignal(unsigned int signalLevel)
+void ControllerLcd::printGsmSignal(byte signalLevel)
 {
-	byte* signalChars;
-	if (signalLevel == 0 || signalLevel == 99) { signalChars = SIGNAL_BAR_NO_SIGNAL; } 
+	byte *signalChars;
+	if (signalLevel == 0 || signalLevel == 99) { signalChars = SIGNAL_BAR_NO_SIGNAL; };
 	if (signalLevel >= 1 && signalLevel <= 9) { signalChars = SIGNAL_BAR_LOW_SIGNAL; }
 	if (signalLevel >= 10 && signalLevel <= 14) { signalChars = SIGNAL_BAR_MEDIUM_SIGNAL; }
 	if (signalLevel >= 15 && signalLevel <= 19) { signalChars = SIGNAL_BAR_GOOD_SIGNAL; }
@@ -125,7 +112,7 @@ void ControllerLcd::printGsmSignal(unsigned int signalLevel)
 	lcd->setCursor(16, 0);
 	for (int i = 0; i < 4; i++)
 	{
-		lcd->print(signalChars[i]);
+		lcd->write(signalChars[i]);
 	}
 }
 
@@ -142,14 +129,8 @@ void ControllerLcd::printBoilerTemperature(float boilerTemperature)
 void ControllerLcd::printPumpState(boolean isPumpOn)
 {
 	lcd->setCursor(17, 1);
-	if (isPumpOn)
-	{
-		lcd->print(F("ON "));
-	}
-	else
-	{
-		lcd->print(F("OFF"));
-	};
+	if (isPumpOn)	{	lcd->print(F("ON "));	}
+	else	{	lcd->print(F("OFF"));	};
 }
 
 void ControllerLcd::printRoomTemperature(float roomTemperature)
@@ -157,11 +138,19 @@ void ControllerLcd::printRoomTemperature(float roomTemperature)
 	lcd->setCursor(9, 2);
 	lcd->print(F("           "));
 	lcd->setCursor(9, 2);
-	lcd->print(roomTemperature);
+	if (roomTemperature < (float)(-100)) { lcd->print(F("ERR")); }
+	else { lcd->print(roomTemperature); }
 }
 
-void ControllerLcd::printUpTime(unsigned months, unsigned days, unsigned hours)
+void ControllerLcd::printStartTime(byte day, byte month, byte hours, byte minute)
 {
+	lcd->setCursor(0, 3);
+	lcd->print(F("            "));
+	lcd->setCursor(0, 3);
+	char buffer[12];
+	for (byte i = 0; i < 12; i++) { buffer[i] = 0; }
+	sprintf(buffer, "%02d/%02d %02d:%02d", day, month, hours, minute);
+	lcd->print(buffer);
 }
 
 void ControllerLcd::printUnitTemperature(float unitTemperature)
@@ -171,9 +160,4 @@ void ControllerLcd::printUnitTemperature(float unitTemperature)
 	lcd->print(F("    "));
 	lcd->setCursor(16, 3);
 	lcd->print(intTempValue);
-}
-
-LiquidCrystal& ControllerLcd::getLcd() const
-{
-	return *lcd;
 }

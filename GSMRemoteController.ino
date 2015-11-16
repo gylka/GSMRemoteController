@@ -1,13 +1,13 @@
-#include "Sim900.h"
 #include <EEPROM.h>
 #include <LiquidCrystal.h>
-#include <SoftwareSerial.h>
 #include <OneWire.h>
 
+#include <BigBufferSoftwareSerial.h>
 #include <TempSensor.h>
 #include <ControllerLcd.h>
 #include <Button.h>
 #include <SwitchableDevice.h>
+#include <Sim900.h>
 
 
 // Pins
@@ -29,19 +29,21 @@ const int PUMP_TURN_ON_HYSTERESIS = 2;
 
 // Global variables
 LiquidCrystal lcdDevice(10, 6, 5, 4, 3, 2);
-SoftwareSerial gsmModuleDevice(7, 8);
+BigBufferSoftwareSerial gsmModuleDevice(7, 8);
 OneWire boilerTempDevice(BOILER_TEMP_PIN);
 OneWire roomTempDevice(ROOM_TEMP_PIN);
 OneWire unitTempDevice(UNIT_TEMP_PIN);
 
 ControllerLcd lcd(lcdDevice);
-TempSensor boilerTempSensor(boilerTempDevice, TempSensor::_10BIT_RESOLUTION, Serial);
-TempSensor roomTempSensor(roomTempDevice, TempSensor::_10BIT_RESOLUTION, Serial);
-TempSensor unitTempSensor(unitTempDevice, TempSensor::_10BIT_RESOLUTION, Serial);
-Button boilerButtonOn(BOILER_ON_BTN, Serial);
-Button boilerButtonOff(BOILER_OFF_BTN, Serial);
+TempSensor boilerTempSensor(boilerTempDevice, TempSensor::_11BIT_RESOLUTION, Serial);
+TempSensor roomTempSensor(roomTempDevice, TempSensor::_11BIT_RESOLUTION, Serial);
+TempSensor unitTempSensor(unitTempDevice, TempSensor::_11BIT_RESOLUTION, Serial);
+Button boilerButtonOn(BOILER_ON_BTN);
+Button boilerButtonOff(BOILER_OFF_BTN);
 SwitchableDevice boiler(BOILER_SW_ON);
 SwitchableDevice pump(PUMP_SW_ON);
+Sim900 gsmModule(GSM_SW_PIN, gsmModuleDevice, boilerTempSensor, roomTempSensor,
+	unitTempSensor, boiler, pump, Serial);
 
 void initializePins();
 void printshit();
@@ -55,7 +57,7 @@ void setup() {
 	lcd.showSplashScreen();
 	initializePins();
 	Serial.begin(19200);
-	//	gsmModule.begin(19200);                               // SIM900 module earlier should be configured to 19200 (AT+IPR command)
+	gsmModuleDevice.begin(19200);                               // SIM900 module earlier should be configured to 19200 (AT+IPR command)
 	delay(1000);
 	boiler.applyState(EEPROM.read(BOILER_STATUS_EEPROM_ADDRESS));
 	lcd.printBlankTemplate();
@@ -72,6 +74,14 @@ void loop() {
 	processRoomTempSensor();
 	processUnitTempSensor();
 
+	gsmModule.run();
+	lcd.printGsmModuleState(gsmModule.isOn);
+	lcd.printGsmSignal(gsmModule.signalLevel);
+	if (gsmModule.currentDateTime.year != 0)
+	{
+		lcd.printStartTime(gsmModule.currentDateTime.day, gsmModule.currentDateTime.month, gsmModule.currentDateTime.hour, gsmModule.currentDateTime.minute);
+	}
+	delay(100);
 }
 
 void initializePins() {
