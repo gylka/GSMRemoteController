@@ -1,6 +1,7 @@
 #include "Sim900.h"
 
 char Sim900::allowedPhoneNumbers[Sim900::NUMBER_OF_ALLOWED_PHONE_NUMBERS][14] = {
+	// Add allowed phone numbers here
 };
 
 Sim900::Sim900(int gsmModuleSwitchPin, BigBufferSoftwareSerial& serialDevice, TempSensor& boilerSensor_, TempSensor& roomSensor_,
@@ -21,16 +22,80 @@ Sim900::Sim900(int gsmModuleSwitchPin, BigBufferSoftwareSerial& serialDevice, Te
 	millisLastTimeDateTimeChecked = 0;
 	millisLastAnswerRecieved = 0;
 	signalLevel = 0;
-	currentDateTime.year = 0;
-	currentDateTime.month = 0;
-	currentDateTime.day = 0;
-	currentDateTime.hour = 0;
-	currentDateTime.minute = 0;
-	startingDateTime.year = 0;
-	startingDateTime.month = 0;
-	startingDateTime.day = 0;
-	startingDateTime.hour = 0;
-	startingDateTime.minute = 0;
+	currentDateTime = { 0, 0, 0, 0, 0 };
+	startingDateTime = { 0, 0, 0, 0, 0 };
+	isBoilerStartScheduled = false;
+	boilerScheduledStartDateTime = { 0, 0, 0, 0, 0 };
+}
+
+byte Sim900::getNumberOfDaysInMonth (byte year, byte month)
+{
+	switch (month)
+	{
+	case 1: return 31;
+	case 2: 
+	{
+		if (year % 4 == 0) { return 29; }
+		return 28;
+	}
+	case 3: return 31;
+	case 4: return 30;
+	case 5: return 31;
+	case 6: return 30;
+	case 7: return 31;
+	case 8: return 31;
+	case 9: return 30;
+	case 10: return 31;
+	case 11: return 30;
+	case 12: return 31;
+	}
+	return 0;
+}
+
+void Sim900::increaseDateTimeByOneDay(DateTime& input, DateTime& output)
+{
+	if(input.day >= getNumberOfDaysInMonth(input.year, input.month))
+	{
+		if (input.month == 12)
+		{
+			output.year = input.year + 1;
+			output.month = 1;
+		} else
+		{
+			output.year = input.year;
+			output.month = input.month + 1;
+		}
+		output.day = 1;
+	} else
+	{
+		output.year = input.year;
+		output.month = input.month;
+		output.day = input.day + 1;
+	}
+	output.hour = input.hour;
+	output.minute = input.minute;
+}
+
+boolean Sim900::isLeftDateTimeGreaterThanRight(DateTime& left, DateTime& right)
+{
+	if (left.year > right.year) { return true;	}
+	if (left.year == right.year)
+	{
+		if (left.month > right.month) { return true; }
+		if (left.month == right.month)
+		{
+			if (left.day > right.day) { return true; }
+			if (left.day == right.day)
+			{
+				if (left.hour > right.hour) { return true; }
+				if (left.hour == right.hour)
+				{
+					if (left.minute > right.minute) { return true; }
+				}
+			}
+		}
+	}
+	return false;
 }
 
 void Sim900::run()
@@ -38,6 +103,26 @@ void Sim900::run()
 	sendSignalCheckPeriodically();
 	sendDateTimeCheckPeriodically();
 	if (readModuleDataToBufferIfAvailiable())	{	parseBufferAndExecute();   }
+	if ((currentDateTime.year != 0) && isBoilerStartScheduled && (boilerScheduledStartDateTime.year == 0))
+	{
+		if (currentDateTime.hour >= boilerScheduledStartDateTime.hour)
+		{
+			increaseDateTimeByOneDay(currentDateTime, boilerScheduledStartDateTime);
+			boilerScheduledStartDateTime.minute = 0;
+		}
+		else
+		{
+			boilerScheduledStartDateTime = { currentDateTime.year, currentDateTime.month, currentDateTime.day, boilerScheduledStartDateTime.hour, 0 };
+		}
+	}
+	if (isBoilerStartScheduled && (boilerScheduledStartDateTime.year != 0))
+	{
+		if (isLeftDateTimeGreaterThanRight(currentDateTime, boilerScheduledStartDateTime))
+		{
+			boiler->turnOn();
+			isBoilerStartScheduled = false;
+		}
+	}
 }
 
 void Sim900::switchState()
@@ -146,7 +231,7 @@ void Sim900::parseBufferAndExecute()
 	if (isCharArraysEqual(buffer, smsArriveSign, 0, 8))
 	{
 		byte smsSenderIndex = isSmsSenderPhoneNumberAllowed();
-		if (smsSenderIndex != 255)
+		if (smsSenderIndex != BYTE_ERROR_VALUE)
 		{
 			char onCommand[3] = "on";
 			char offCommand[4] = "off";
@@ -154,8 +239,34 @@ void Sim900::parseBufferAndExecute()
 			stringToLowerCase(buffer, 51, 4);
 			if (isCharArraysEqual(buffer, onCommand, 51, 2))
 			{
-				boiler->turnOn();
-				sendSmsResponse(smsSenderIndex, COMMAND_ON);
+				byte boilerScheduledStartHour = readScheduledTimeToByte();
+				if (boilerScheduledStartHour != BYTE_ERROR_VALUE)		
+				{
+					isBoilerStartScheduled = true;
+					if (currentDateTime.year != 0)                                  // Checking if current time been already set or having initial value
+					{
+						if (currentDateTime.hour >= boilerScheduledStartHour)
+						{
+							increaseDateTimeByOneDay(currentDateTime, boilerScheduledStartDateTime);
+							boilerScheduledStartDateTime.hour = boilerScheduledStartHour;
+							boilerScheduledStartDateTime.minute = 0;
+						}
+						else
+						{
+							boilerScheduledStartDateTime = { currentDateTime.year, currentDateTime.month, currentDateTime.day, boilerScheduledStartHour, 0 };
+						}
+					}
+					else
+					{
+						boilerScheduledStartDateTime = { 0, 0, 0, boilerScheduledStartHour, 0 };
+					}
+					sendSmsResponse(smsSenderIndex, COMMAND_ON_SCHEDULED);
+				} else
+				{
+					isBoilerStartScheduled = false;
+					boiler->turnOn();
+					sendSmsResponse(smsSenderIndex, COMMAND_ON);
+				}
 			}
 			if (isCharArraysEqual(buffer, offCommand, 51, 3))
 			{
@@ -181,6 +292,16 @@ boolean Sim900::isCharArraysEqual(char* array1, char* array2, byte startIndexOfA
 	return true;
 }
 
+byte Sim900::readScheduledTimeToByte()
+{
+	byte returnValue = 0;
+	for (int i = 53; i < 55; i++) { if (buffer[i] < 48 || buffer[i] > 57) { return BYTE_ERROR_VALUE; } }
+	returnValue = (buffer[53] - 48) * 10 + buffer[54] - 48;
+	if (returnValue > 23) { return BYTE_ERROR_VALUE; }
+	return returnValue;
+}
+
+
 // Will return index from allowedPhoneNumbers[] or 255 if number not found in allowedPhoneNumbers[]
 byte Sim900::isSmsSenderPhoneNumberAllowed()
 {
@@ -195,7 +316,7 @@ void Sim900::stringToLowerCase(char* array, byte startingIndex, byte length)
 {
 	for (int i = startingIndex; i < startingIndex + length; i++)
 	{
-		if (array[i] < 97) { array[i] += 32; }
+		if (array[i] >= 65 && array[i] <= 90) { array[i] += 32; }
 	}
 }
 
@@ -209,6 +330,12 @@ void Sim900::sendSmsResponse(byte indexOfSmsSender, byte command)
 	switch (command)
 	{
 		case COMMAND_ON: gsmSerial->print("ON"); break;
+		case COMMAND_ON_SCHEDULED:
+		{
+			gsmSerial->print("ON");
+			gsmSerial->print(boilerScheduledStartDateTime.hour);
+			break;
+		}
 		case COMMAND_OFF: gsmSerial->print("OFF"); break;
 		case COMMAND_STATUS: gsmSerial->print("STAT"); break;
 	}

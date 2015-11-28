@@ -127,6 +127,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <None Include=".gitignore" />
     <None Include="GSMRemoteController.ino">
       <FileType>CppCode</FileType>
     </None>
@@ -151,6 +152,9 @@
     <ClCompile Include="Sim900.cpp" />
     <ClCompile Include="SwitchableDevice.cpp" />
     <ClCompile Include="TempSensor.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="phone_numbers.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -38,8 +38,11 @@ private:
 	static const byte NUMBER_OF_ALLOWED_PHONE_NUMBERS = 6;
 
 	static const byte COMMAND_ON = 10;
+	static const byte COMMAND_ON_SCHEDULED = 101;
 	static const byte COMMAND_OFF = 11;
 	static const byte COMMAND_STATUS = 12;
+
+	static const byte BYTE_ERROR_VALUE = 255;
 							
 	static char allowedPhoneNumbers[NUMBER_OF_ALLOWED_PHONE_NUMBERS][14];
 
@@ -58,12 +61,15 @@ private:
 	boolean isDateTimeCommandSent;
 	unsigned long millisLastTimeDateTimeChecked;
 	unsigned long millisLastAnswerRecieved;
-	DateTime startingDateTime;
 
 	inline void clearBuffer();
-	inline boolean isCharArraysEqual(char* array1, char* array2, byte startIndexOfArray1, byte length);
+	static inline boolean isCharArraysEqual(char* array1, char* array2, byte startIndexOfArray1, byte length);
 	inline byte isSmsSenderPhoneNumberAllowed();
-	inline void stringToLowerCase(char* array, byte startingIndex, byte length);
+	static inline void stringToLowerCase(char* array, byte startingIndex, byte length);
+	inline byte readScheduledTimeToByte();
+	static inline byte getNumberOfDaysInMonth(byte year, byte month);
+	static inline void increaseDateTimeByOneDay(DateTime& input, DateTime& output);
+	static inline boolean isLeftDateTimeGreaterThanRight(DateTime& left, DateTime& right);
 	void switchState();
 	void sendSignalCheckPeriodically();
 	void sendDateTimeCheckPeriodically();
@@ -73,8 +79,11 @@ private:
 
 public:
 	DateTime currentDateTime;
+	DateTime startingDateTime;
 	boolean isOn;
 	byte signalLevel;
+	DateTime boilerScheduledStartDateTime;
+	boolean isBoilerStartScheduled;
 
 	Sim900(int gsmModuleSwitchPin, BigBufferSoftwareSerial& serialDevice, TempSensor& boilerSensor_, TempSensor& roomSensor_,
 		TempSensor& unitSensor_, SwitchableDevice& boilerDevice_, SwitchableDevice& pumpDevice_, HardwareSerial& debuggerSerial);

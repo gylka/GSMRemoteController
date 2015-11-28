@@ -19,10 +19,14 @@ private:
 	static byte SIGNAL_BAR_GOOD_SIGNAL[4];
 	static byte SIGNAL_BAR_SUPER_SIGNAL[4];
 
+	static const int LCD_REFRESH_INTERVAL_MS = 5000;
+
 	LiquidCrystal* lcd;
+	unsigned long lastResfreshTimeMs;
 
 public:
-
+	boolean isScreenRefreshed;
+	
 	explicit ControllerLcd(LiquidCrystal& display);
 
 	inline void clear() const	{	lcd->clear();	};
@@ -36,6 +40,7 @@ public:
 	void printRoomTemperature(float roomTemperature);
 	void printStartTime(byte days, byte month, byte hours, byte minute);
 	void printUnitTemperature(float unitTemperature);
+	void run();
 
 };
 

@@ -197,3 +197,6 @@ FakesAssemblies/
 
 # Visual Studio 6 workspace options file
 *.opt
+
+# Phone numbers that should be inserted into Sim900::allowedPhoneNumbers array
+phone_numbers.txt

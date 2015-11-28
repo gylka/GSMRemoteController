@@ -53,7 +53,7 @@ byte ControllerLcd::SIGNAL_BAR_MEDIUM_SIGNAL[4] = { 0,0,2,3 };
 byte ControllerLcd::SIGNAL_BAR_GOOD_SIGNAL[4] = { 0,0,0,3 };
 byte ControllerLcd::SIGNAL_BAR_SUPER_SIGNAL[4] = { 0,0,0,0 };
 
-ControllerLcd::ControllerLcd(LiquidCrystal& display) {	lcd = &display; }
+ControllerLcd::ControllerLcd(LiquidCrystal& display) { lcd = &display; isScreenRefreshed = true; }
 
 void ControllerLcd::init() const
 {
@@ -160,4 +160,15 @@ void ControllerLcd::printUnitTemperature(float unitTemperature)
 	lcd->print(F("    "));
 	lcd->setCursor(16, 3);
 	lcd->print(intTempValue);
+}
+
+void ControllerLcd::run()
+{
+	if (millis() - lastResfreshTimeMs > LCD_REFRESH_INTERVAL_MS)
+	{
+		lcd->clear();
+		printBlankTemplate();
+		lastResfreshTimeMs = millis();
+		isScreenRefreshed = true;
+	}
 }
